@@ -104,4 +104,9 @@ network:
 
    
 # Air Gap
-Jika ingin menggunakan airgap, pada control node 
+Untuk mengaktifkan airgap bisa dengan mengedit file group_vars/aio/vars.yml
+```yaml
+airgap_enable: True
+local_mirror_host: {IP ADDRESS mirror offline}
+local_mirror_apt_port: {{ Port mirror offline}}
+```
