@@ -100,8 +100,8 @@ network:
    ```
 
 6. Akses horizon http://{ public_ip }/horizon
-   <img width="1862" height="961" alt="Screenshot from 2026-05-26 13-51-51" src="https://github.com/user-attachments/assets/38a71e68-3f0d-4ba1-96e1-576d67514025" />
-   <img width="1862" height="961" alt="image" src="https://github.com/user-attachments/assets/2e0bcac5-08aa-434a-9433-b0c163372d28" />
+<img width="1920" height="981" alt="image" src="https://github.com/user-attachments/assets/f4373761-e4cd-4721-bfb4-fabc2bbbdac1" />
+
    
 # Air Gap
 Jika ingin menggunakan airgap, pada control node 
