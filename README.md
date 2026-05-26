@@ -87,7 +87,8 @@ network:
    ```
 6. Untuk edit / setting aio ada pada groups_vars/aio/vars.yml
    Jangan lupa masukan nama disk yang akan dijadikan osd
-   ```yaml
+   ```yaml<img width="1862" height="961" alt="image" src="https://github.com/user-attachments/assets/e36272d8-1876-432c-90ab-b2d0290ce402" />
+
    osd_disk:
    - /dev/sdb
    - /dev/sdc
@@ -99,4 +100,8 @@ network:
    ```
 
 6. Akses horizon http://{ public_ip }/horizon
+   <img width="1862" height="961" alt="Screenshot from 2026-05-26 13-51-51" src="https://github.com/user-attachments/assets/38a71e68-3f0d-4ba1-96e1-576d67514025" />
+   <img width="1862" height="961" alt="image" src="https://github.com/user-attachments/assets/2e0bcac5-08aa-434a-9433-b0c163372d28" />
    
+# Air Gap
+Jika ingin menggunakan airgap, pada control node 
