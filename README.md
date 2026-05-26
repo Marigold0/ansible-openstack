@@ -18,8 +18,11 @@ Jika menggunakan OpenVswitch pada netplan
    sudo apt install openvswitch-switch openvswitch-common
    ```
    
-3. Edit netplan dengan menabahkan "openvswitch:{}"
-4. Samakan MAC Address bridge dengan interface fisik
+3. Edit netplan dengan menabahkan
+   ```yaml
+   openvswitch:{}
+   ```
+5. Samakan MAC Address bridge dengan interface fisik
    ```shell
    sudo ovs-vsctl set bridge br-ex other-config:hwaddr=fa:16:3e:47:f0:4b
    ```
@@ -28,7 +31,7 @@ Jika menggunakan OpenVswitch pada netplan
 KONFIGURASI NETPLAN
 ---------------------------------------------
 Contoh netplan sederhana:
----------------------------
+---------------------------------------------
 ```yaml
 network:
   version: 2
@@ -59,7 +62,7 @@ network:
 # DEPLOY OPENSTACK AIO + CEPH
 
 ----------------------------------------------
-1. copy pulic key nya dahulu
+1. copy public key nya dahulu
    ```shell
     ssh-copy-id user@hostname/ip
    
