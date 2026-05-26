@@ -1,0 +1,35 @@
+---
+- name: Cleanup Ceph Bootstrap
+  hosts: aio
+  become: yes
+  tasks:
+    - name: Stop ceph-mon
+      ansible.builtin.systemd:
+        name: ceph-mon@{{ ansible_hostname }}
+        state: stopped
+      ignore_errors: yes
+
+    - name: Stop ceph-mgr
+      ansible.builtin.systemd:
+        name: ceph-mgr@{{ ansible_hostname }}
+        state: stopped
+      ignore_errors: yes
+
+    - name: Hapus semua data bootstrap
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /var/lib/ceph/mon/ceph-{{ ansible_hostname }}/store.db
+        - /var/lib/ceph/mon/ceph-{{ ansible_hostname }}/keyring
+        - /var/lib/ceph/mon/ceph-{{ ansible_hostname }}/done
+        - /var/lib/ceph/mon/ceph-{{ ansible_hostname }}/kv_backend
+        - /var/lib/ceph/mgr/ceph-{{ ansible_hostname }}/keyring
+        - /tmp/monmap
+        - /tmp/ceph.mon.keyring
+
+    - name: Reset failed state
+      ansible.builtin.command: >
+        systemctl reset-failed ceph-mon@{{ ansible_hostname }}
+      ignore_errors: yes
+      changed_when: true

@@ -1,0 +1,67 @@
+[DEFAULT]
+debug = true
+rootwrap_config = /etc/cinder/rootwrap.conf
+api_paste_confg = /etc/cinder/api-paste.ini
+iscsi_helper = lioadm
+volume_name_template = volume-%s
+volume_group = cinder-volumes
+verbose = True
+auth_strategy = keystone
+state_path = /var/lib/cinder
+lock_path = /var/lock/cinder
+volumes_dir = /var/lib/cinder/volumes
+transport_url = rabbit://openstack:openstack@controller1:5672,openstack:openstack@controller2:5672,openstack:openstack@controller3:5672
+my_ip = 172.16.200.11
+enabled_backends = ceph
+glance_api_servers = http://vip.internal:9292
+
+[database]
+connection = mysql+pymysql://cinder:cinder@vip.internal:6033/cinder
+max_retries = 10
+retry_interval = 10
+max_pool_size = 50
+max_overflow = 100
+pool_timeout = 30
+
+[keystone_authtoken]
+www_authenticate_uri = http://vip.internal:5000
+auth_url = http://vip.internal:5000
+memcached_servers = controller1:11211,controller2:11211,controller3:11211
+auth_type = password
+project_domain_name = default
+user_domain_name = default
+project_name = service
+username = cinder
+password = cinder
+
+[ceph]
+volume_driver = cinder.volume.drivers.rbd.RBDDriver
+volume_backend_name = ceph
+rbd_cluster_name = ceph
+rbd_pool = volumes
+rbd_ceph_conf = /etc/ceph/ceph.conf
+rbd_flatten_volume_from_snapshot = false
+rbd_max_clone_depth = 5
+rbd_store_chunk_size = 4
+rados_connect_timeout = -1
+rbd_user = cinder
+rbd_secret_uuid = f5d50af4-8319-4e23-9938-7859992e296c
+
+[oslo_concurrency]
+lock_path = /var/lib/cinder/tmp
+
+[oslo_messaging_rabbit]
+rabbit_hosts=controller1:5672,controller2:5672,controller3:5672
+rabbit_retry_interval=1
+rabbit_retry_backoff=2
+rabbit_max_retries=10
+rabbit_ha_queues=true
+rabbit_durable_queues=true
+rabbit_transient_queues=false
+rabbit_heartbeat_timeout_threshold=60
+rabbit_heartbeat_rate=2
+
+[oslo_messaging_notifications]
+driver = messagingv2
+transport_url = rabbit://openstack:openstack@controller1:5672,openstack:openstack@controller2:5672,openstack:openstack@controller3:5672
+topics = notifications

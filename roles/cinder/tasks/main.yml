@@ -1,0 +1,4 @@
+- name: Import Task Cinder
+  ansible.builtin.include_tasks: "{{ item }}"
+  loop: "{{ cinder_components }}"
+

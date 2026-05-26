@@ -1,0 +1,16 @@
+---
+- name: Verify Install NTP
+  ansible.builtin.command: systemctl status ntpsec
+  register: ntp_status
+  changed_when: false
+
+- name: Display version
+  ansible.builtin.debug:
+    var: ntp_status.stdout
+
+- name: Restart Ntpsec
+  ansible.builtin.systemd_service:
+    name: ntpsec
+    state: restarted
+  become: true
+

@@ -1,0 +1,24 @@
+---
+- name: Install Package Neutron Untuk Compute
+  ansible.builtin.apt:
+    name:
+      - neutron-ovn-metadata-agent
+      #      - neutron-openvswitch-agent
+    state: present
+  become: yes
+
+- name: Konfigurasi Neutron Compute
+  ansible.builtin.template:
+    src: neutron.conf.j2
+    dest: /etc/neutron/neutron.conf
+    owner: root
+    group: neutron
+    mode: '0644'
+    backup: yes
+  become: yes
+  notify:
+    - restart nova-compute
+    - restart neutron-ovn-metadata-agent
+
+  
+

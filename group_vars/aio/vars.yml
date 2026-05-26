@@ -1,0 +1,95 @@
+---
+# Local Mirror jika ingin menggunakan air gap
+airgap_enable: True
+local_mirror_host: "172.31.249.236"
+local_mirror_apt_port: 8085
+
+# ----------------------------------
+# Network
+# ----------------------------------
+# Nama dari interface yang nantinya akan dijadikan external atau provider (br-ex)
+external_interface_name: ens4
+
+#internal_interface_name:
+
+# Pada bagian ini berisi variable untuk mengatur jaringan yang akan digunakan oleh ansible
+# dan juga oleh service lain
+# internal_ip  --> digunakan oleh service yang membutuhkan jaringan private, sebagian besar service pada roles mengarah ke ip_internal ini sebagai bind nya.
+# public_ip    --> digunakan oleh service yang akan di ekspose ke luar, seperti untuk akses web horizon.
+# admin_ip     --> digunakan untuk service admin, biasanya sama dengan internal_ip
+#
+# untuk internal_ip bisa menggunakan variable bawaan dari ansible seperti 'ansible_user' yang di isi pada inventory/host.ini 
+internal_ip: "172.31.248.184"
+public_ip: "172.31.248.184"
+admin_ip: "172.31.248.184"
+
+# -----------------------------------
+# MariaDB
+# -----------------------------------
+# Bagian ini berisi variable untuk MariaDB
+mariadb_bind_address: "{{ internal_ip }}"
+mariadb_root_password: "{{ vault_mariadb_root_password }}"
+mariadb_port: "3306"
+
+# ----------------------------------
+# RabbitMQ
+# -----------------------------------
+rabbit_user: "openstack"
+rabbit_pass: "{{ vault_rabbit_pass }}"
+
+# ----------------------------------- 
+# Memcached ---
+memcached_bind_address: "0.0.0.0"
+
+
+# ----------------------------------
+# Open Virtual Network - Central
+# ----------------------------------
+# Bagian dibawah ini berisi variable untuk ovn-central, untuk database address nb dan sb menggunakan address dari internal_ip
+ovn_northd_nb_db: "tcp:{{ internal_ip }}:6641"
+ovn_northd_sb_db: "tcp:{{ internal_ip }}:6642"
+
+# -------------------------------
+# Open Virtual Network - Host
+# -------------------------------
+# Bagian ini untuk variable dari script ovn-host
+# Untuk melakukan koneksi remote antara ovn-central dan ovn-host, address yang dipakai adalah internal_ip dari ovn-central
+ovn_remote: "tcp:{{ internal_ip }}:6642"
+
+# Encapsulation yang bisa digunakan antara lain adalah geneve, vxlan, flat dan untuk tunneling nya menggunakan ip pada encap_ip
+ovn_encap_type: "geneve"
+ovn_encap_ip: "{{ public_ip }}"
+ovn_cms_options: "enable-chassis-as-gw"
+
+# --------------------------------
+# CEPH 
+# --------------------------------
+#
+# Disk yang akan dihapus dan dipakai oleh Ceph OSD.
+# Format disk terlebih dahulu sebelum menjalankan playbook 
+# Jika ingin mengulang kembali playbook dari awal, bisa lebih dahulu format ulang disk secara manual
+osd_disk: 
+ - /dev/sdb
+ - /dev/sdc
+ - /dev/sdd 
+
+# Generate secara manual untuk ceph fsid dan rbd secret menggunakan command uuid
+ceph_public_network: 192.168.100.0/24
+ceph_cluster_network: 172.31.248.0/22
+ceph_mon_host: "{{ internal_ip }}"
+ceph_fsid: "0c91568a-679c-43d2-8930-0be313a3b5e0"
+rbd_secret_id: "f5d50af4-8319-4e23-9938-7859992e296c"
+
+
+# -----------------------------------
+# Openstack 
+# -----------------------------------
+#bootstrap-admin-url: "http://{{ management_ip }}:5000/v3/"
+keystone_db_pass: "{{ keystone_db }}"
+glance_db_pass: "glance"
+placement_db_pass: "placement"
+nova_db_pass: "nova"
+neutron_db_pass: "neutron"
+cinder_db_pass: "cinder"
+
+

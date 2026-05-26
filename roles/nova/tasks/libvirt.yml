@@ -1,0 +1,75 @@
+---
+- name: Stop libvirtd Service
+  ansible.builtin.systemd_service:
+    name: libvirtd
+    state: stopped
+  become: yes
+
+- name: Stop libvirt Socket
+  ansible.builtin.systemd_service:
+    name: libvirtd.socket
+    state: stopped
+  become: yes
+
+- name: Stop libvirtd tcp socket
+  ansible.builtin.systemd_service:
+    name: libvirtd-tcp.socket
+    state: stopped
+    enabled: yes
+  become: yes
+
+- name: Konfigurasi Libvirtd
+  ansible.builtin.template: 
+    src: libvirtd.conf.j2
+    dest: /etc/libvirt/libvirtd.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+  changed_when: false
+
+- name: Konfigurasi Libvirtd
+  ansible.builtin.template: 
+    src: libvirt.conf.j2
+    dest: /etc/libvirt/libvirt.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+  changed_when: false
+
+- name: Restart libvirtd tcp socket
+  ansible.builtin.systemd_service:
+    name: libvirtd-tcp.socket
+    state: restarted
+    enabled: yes
+  become: yes
+
+- name: Restart libvirtd server
+  ansible.builtin.systemd_service:
+    name: libvirtd
+    state: restarted
+    enabled: yes
+  become: yes
+
+    #  notify:
+    #    - restart libvirt-tcp.socket
+    #    - restart libvirt.server
+      #    - restart libvirt.socket
+      #    - restart nova-api
+      #    - restart nova-compute
+      #    - restart nova-scheduler
+      #    - restart nova-novncproxy
+
+      #- name: Cek Service Pada Compute 
+      #  ansible.builtin.shell: |
+      #    source /home/{{ ansible_user }}/admin-openrc && openstack compute service list
+      #  args:
+      #    executable: /bin/bash
+      #  register: check_service
+      #  become: yes
+      #  changed_when: true
+
+      #- name: Cek Service Pada Compute
+      #  ansible.builtin.debug:
+      #    msg: "{{ check_service.stdout_lines }}"

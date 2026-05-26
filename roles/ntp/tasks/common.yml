@@ -1,0 +1,24 @@
+---
+- name: Install common Package 
+  ansible.builtin.package:
+    name:
+      - ntp
+      - ntpsec
+      - python3-openstackclient
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Enabling ntp Service
+  ansible.builtin.service:
+    name: ntpsec
+    state: started
+    enabled: yes
+  become: true
+
+- name: Stop unattended-upgrade
+  ansible.builtin.service:
+    name: unattended-upgrades
+    state: stopped
+    enabled: no
+  become: true

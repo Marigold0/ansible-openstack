@@ -1,0 +1,47 @@
+---
+- name: Install Package
+  ansible.builtin.package:
+    name: 
+      - ceph-common
+      - ceph-mgr
+      - ceph-mon
+      - ceph-osd
+      - ceph-mds
+      - python3-ceph-common
+    state: present
+
+# =========================================
+# Check dir dan buat
+# =========================================
+
+- name: Cek apakah direktori sudah ada
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: dir_check
+  loop:
+    - /var/lib/ceph/mon/ceph-{{ ansible_hostname }}
+    - /var/lib/ceph/mgr/ceph-{{ ansible_hostname }}
+    - /var/lib/ceph/bootstrap-osd
+
+- name: Buat direktori Ceph
+  ansible.builtin.file:
+    path: "{{ item.item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop: "{{ dir_check.results }}"
+  when: not item.stat.exists
+
+- name: Konfigurasi Ceph.conf
+  ansible.builtin.template:
+    src: ceph.conf.j2
+    dest: /etc/ceph/ceph.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Jalankan komponen Ceph
+  ansible.builtin.include_tasks: "{{ item }}"
+  loop: "{{ ceph_components }}"
+

@@ -1,0 +1,54 @@
+---
+# ----------------------------------
+# Network
+# ----------------------------------
+management_ip: "{{ ansible_host}}"
+tunnel_ip: "172.31.251.121"
+
+# API
+public_ip: "172.31.248.95"
+internal_ip: "172.31.248.95"
+admin_ip: "172.31.248.95"
+
+# -----------------------------------
+# MariaDB
+# -----------------------------------
+mariadb_bind_address: "{{ management_ip }}"
+mariadb_root_password: "{{ vault_mariadb_root_password }}"
+mariadb_port: "3306"
+
+# ----------------------------------
+# RabbitMQ  
+# -----------------------------------
+rabbit_user: "openstack"
+rabbit_pass: "{{ vault_rabbit_pass }}"
+
+# ----------------------------------- 
+# Memcached ---
+memcached_bind_address: "0.0.0.0"
+
+# -------------------------------
+# OVS
+# ------------------------------
+ovn_remote: "tcp:172.31.248.95:6642"
+# encapsulation yang akan digunakan geneve,vxlan
+ovn_encap_type: "geneve"
+ovn_encap_ip: "172.31.248.95"
+ovn_cms_options: "enable-chassis-as-gw"
+
+# --------------------------------
+# Ceph-mon
+#
+ceph_public_network: 172.31.248.0/22
+ceph_cluster_network: 172.31.248.0/22
+ceph_mon_host: "{{ management_ip }}"
+ceph_fsid: "0c91568a-679c-43d2-8930-0be313a3b5e0"
+rbd_secret_id: "f5d50af4-8319-4e23-9938-7859992e296c" 
+# -----------------------------------
+# keystone
+keystone_db_pass: "{{ keystone_db }}"
+glance_db_pass: "glance"
+placement_db_pass: "placement"
+nova_db_pass: "nova"
+neutron_db_pass: "neutron"
+cinder_db_pass: "cinder"

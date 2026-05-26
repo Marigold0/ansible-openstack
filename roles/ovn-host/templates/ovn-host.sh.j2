@@ -1,0 +1,13 @@
+#!/bin/bash
+
+/usr/share/openvswitch/scripts/ovs-ctl start --system-id={{ ansible_hostname }}
+/usr/share/ovn/scripts/ovn-ctl restart_controller
+
+ovs-vsctl set open . external-ids:ovn-bridge=br-int
+ovs-vsctl set open . external-ids:ovn-bridge-mappings=provider:br-ex
+ovs-vsctl set open . external-ids:ovn-remote={{ ovn_remote }}
+ovs-vsctl set open . external-ids:ovn-encap-type={{ ovn_encap_type }}
+ovs-vsctl set open . external-ids:ovn-encap-ip={{ ovn_encap_ip }}
+ovs-vsctl set open . external-ids:ovn-cms-options={{ ovn_cms_options }}
+ovs-vsctl set open . external-ids:hostname={{ ansible_hostname }}
+ovs-vsctl set-manager ptcp:6640:127.0.0.1

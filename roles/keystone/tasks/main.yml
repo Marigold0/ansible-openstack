@@ -1,0 +1,123 @@
+---
+- name: Install package
+  ansible.builtin.apt:
+    name:
+      - apache2
+      - software-properties-common
+      - keystone
+      - libapache2-mod-wsgi-py3
+      - python3-openstackclient
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Konfigurasi keystone.conf
+  ansible.builtin.template:
+    src: keystone.conf.j2
+    dest: /etc/keystone/keystone.conf
+    owner: keystone
+    group: keystone
+    mode: '0644'
+    backup: yes
+  become: yes
+
+- name: Populate Database Keystone
+  ansible.builtin.command: >
+    su -s /bin/sh -c "keystone-manage db_sync" keystone
+  become: yes
+  changed_when: false
+
+- name: Cek apakah fernet keys sudah ada
+  ansible.builtin.stat:
+    path: /etc/keystone/fernet-keys/0
+  register: fernet_check
+
+- name: Initialize Fernet Key Repositories
+  ansible.builtin.command: >
+    keystone-manage fernet_setup
+    --keystone-user keystone
+    --keystone-group keystone
+  become: yes
+  when: not fernet_check.stat.exists
+  changed_when: true
+
+- name: Cek apakah credential keys sudah ada
+  ansible.builtin.stat:
+    path: /etc/keystone/credential-keys/0
+  register: credential_check
+
+- name: Initialize Credential Repositories
+  ansible.builtin.command: >
+    keystone-manage credential_setup --keystone-user keystone --keystone-group keystone
+  become: yes
+  when: not credential_check.stat.exists
+  changed_when: true
+
+- name: Konfigurasi Apache2 HTTP server
+  ansible.builtin.template:
+    src: keystone-apache.conf.j2
+    dest: /etc/apache2/sites-available/keystone-apache.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Restart Apache2
+
+- name: Boostrap Keystone Url
+  ansible.builtin.command: >
+    keystone-manage bootstrap --bootstrap-password {{ keystone_admin_pass }} \
+    --bootstrap-admin-url http://{{ internal_ip }}:5000/v3/ \
+    --bootstrap-internal-url http://{{ admin_ip }}:5000/v3/ \
+    --bootstrap-public-url http://{{ public_ip }}:5000/v3/ \
+    --bootstrap-region-id RegionOne
+  become: yes
+  changed_when: true
+
+- name: Membuat file admin environment
+  ansible.builtin.template:
+    src: admin-openrc.j2
+    dest: "/home/{{ ansible_user }}/admin-openrc"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Tunggu Keystone API siap
+  ansible.builtin.uri:
+    url: "http://{{ internal_ip }}:5000/v3/"
+    method: GET
+    status_code: 200
+  register: keystone_ready
+  until: keystone_ready.status == 200
+  retries: 12
+  delay: 5
+
+- name: Cek Project Service
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack project list --format value -c Name
+  args:
+    executable: /bin/bash
+  register: service_check
+  become: yes 
+
+- name: Membuat Project Service
+  ansible.builtin.shell: | 
+    source /home/{{ ansible_user }}/admin-openrc && openstack project create --domain default --description "Service Project" service
+  args:
+    executable: /bin/bash
+  when: "'service' not in service_check.stdout" 
+  changed_when: false
+  become: yes
+
+- name: Memeriksa endpoint 
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack token issue && openstack endpoint list
+  args:
+    executable: /bin/bash
+  become: yes
+  register: openstack_check
+  changed_when: false 
+
+- name: Verifikasi Env Keystone
+  ansible.builtin.debug:
+    msg: "{{ openstack_check.stdout_lines }}" 
+

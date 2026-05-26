@@ -1,0 +1,48 @@
+# ============================================================
+# CREATE GROUPS
+# ============================================================
+- name: Buat Openstack Groups
+  group:
+    name: "{{ item }}"
+    system: true
+    state: present
+  loop:
+    - glance
+    - nova
+    - cinder
+    - neutron
+    - keystone
+    - placement
+    - octavia
+    - heat
+
+# ============================================================
+# CREATE USERS
+# ============================================================
+- name: Buat Openstack Users
+  user:
+    name: "{{ item.name }}"
+    group: "{{ item.group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ item.home }}"
+    create_home: false
+    state: present
+  loop:
+    - { name: glance,    group: glance,    home: /var/lib/glance }
+    - { name: nova,      group: nova,      home: /var/lib/nova }
+    - { name: cinder,    group: cinder,    home: /var/lib/cinder }
+    - { name: neutron,   group: neutron,   home: /var/lib/neutron }
+    - { name: keystone,  group: keystone,  home: /var/lib/keystone }
+    - { name: placement, group: placement, home: /var/lib/placement }
+    - { name: octavia,   group: octavia,   home: /var/lib/octavia }
+    - { name: heat,      group: heat,      home: /var/lib/heat }
+
+- name: Konfigurasi systctl
+  ansible.builtin.template:
+    src: 99-openstack.conf.j2
+    dest: /etc/sysctl.d/99-openstack.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes

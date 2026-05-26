@@ -1,0 +1,147 @@
+---
+## Pendahuluan
+## Install MariaDB dan konfigurasi sebagai backend database openstack
+#
+- name: Installing Package MariaDB
+  ansible.builtin.apt:
+    name:
+      - python3-pymysql
+      - mariadb-server
+      - galera-4
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Tunggu MariaDB Service
+  ansible.builtin.pause:
+    seconds: 20
+
+- name: Cek apakah direktori log sudah ada
+  ansible.builtin.stat:
+    path: /var/log/mysql
+  register: dir_check
+
+- name: Buat direktori Ceph
+  ansible.builtin.file:
+    path: /var/log/mysql
+    state: directory
+    owner: mysql
+    group: mysql
+    mode: '0750'
+  when: not dir_check.stat.exists
+  become: yes
+
+- name: Buat File log
+  ansible.builtin.file:
+    path: /var/log/mysql/mysql.log
+    state: touch
+    owner: mysql
+    group: mysql
+    mode: '0664'
+  when: not dir_check.stat.exists
+  become: yes
+
+- name: Konfigurasi File MariaDB
+  ansible.builtin.template:
+    src: 50-server.cnf.j2
+    dest: /etc/mysql/mariadb.conf.d/50-server.cnf 
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Restart mariadb
+    - Tunggu mariadb
+
+- name: Flush Handlers Supaya MariaDB Restart Dulu Sebelum Lanjut
+  ansible.builtin.meta: flush_handlers
+
+- name: Set root Password MariaDB
+  community.mysql.mysql_user:
+    name: root
+    host: localhost
+    password: "{{ mariadb_root_password }}"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+    column_case_sensitive: true
+    state: present
+  become: yes
+
+- name: Simpan Kredensial root Ke .my.cnf
+  ansible.builtin.template:
+    src: my.cnf.j2
+    dest: /root/.my.cnf
+    owner: root
+    group: root
+    mode: '0600'
+  become: yes
+
+- name: Hapus Anonymous Users 
+  community.mysql.mysql_user:
+    name: ''
+    host_all: yes
+    state: absent
+    login_user: root
+    login_password: "{{ mariadb_root_password }}"
+  no_log: true
+
+- name: Hapus Test Database
+  community.mysql.mysql_db:
+    name: test
+    state: absent
+    login_user: root
+    login_password: "{{ mariadb_root_password }}"
+  no_log: true
+
+# ===============================================
+# Database Komponen Openstack
+# ==============================================
+#
+- name: Membuat Database Komponen Openstack
+  community.mysql.mysql_db:
+    name: "{{ item }}"
+    state: present
+    login_user: root
+    login_password: "{{ mariadb_root_password }}"
+  loop:
+    - keystone
+    - glance
+    - placement
+    - nova
+    - nova_api
+    - nova_cell0
+    - neutron
+    - cinder
+  loop_control:
+    label: "{{ item }}"
+    pause: 2
+
+- name: Membuat User dan Grant Privileges Localhost
+  community.mysql.mysql_user:
+    name: "{{ item.name }}"
+    password: "{{ item.pass }}"
+    priv: "{{ item.db }}.*:ALL"
+    host: "{{ item.host }}"
+    state: present
+    append_privs: true
+    login_user: root
+    login_password: "{{ mariadb_root_password }}"
+  loop:
+    - { name: keystone, pass: "{{ keystone_db_pass }}", db: keystone, host: "localhost" }
+    - { name: keystone, pass: "{{ keystone_db_pass }}", db: keystone, host: "%"         }
+    - { name: glance,   pass: "{{ glance_db_pass }}",   db: glance,   host: "localhost" }
+    - { name: glance,   pass: "{{ glance_db_pass }}",  db: glance,   host: "%" }
+    - { name: placement, pass: "{{ placement_db_pass }}", db: placement, host: "localhost" }
+    - { name: placement, pass: "{{ placement_db_pass }}", db: placement, host: "%" }
+    - { name: nova, pass: "{{ nova_db_pass }}", db: nova, host: "localhost" }
+    - { name: nova, pass: "{{ nova_db_pass }}", db: nova, host: "%" }
+    - { name: nova, pass: "{{ nova_db_pass }}", db: nova_api, host: "localhost" }
+    - { name: nova, pass: "{{ nova_db_pass }}", db: nova_api, host: "%" }
+    - { name: nova, pass: "{{ nova_db_pass }}", db: nova_cell0, host: "localhost" }
+    - { name: nova, pass: "{{ nova_db_pass }}", db: nova_cell0, host: "%" }
+    - { name: neutron, pass: "{{ neutron_db_pass }}", db: neutron, host: "localhost" }
+    - { name: neutron, pass: "{{ neutron_db_pass }}", db: neutron, host: "%" }
+    - { name: cinder, pass: "{{ cinder_db_pass }}", db: cinder, host: "localhost" }
+    - { name: cinder, pass: "{{ cinder_db_pass }}", db: cinder, host: "%" }
+  loop_control:
+    label: "{{ item.name }}@{{ item.host }} -> {{ item.db }}"
+    pause: 5
+  no_log: true

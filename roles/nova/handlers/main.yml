@@ -1,0 +1,57 @@
+---
+- name: restart nova-api
+  ansible.builtin.systemd_service:
+    name: nova-api 
+    state: restarted
+    enabled: yes
+  become: yes
+
+- name: restart nova-scheduler
+  ansible.builtin.systemd_service:
+    name: nova-scheduler
+    state: restarted
+    enabled: yes
+  become: yes
+
+- name: restart nova-conductor
+  ansible.builtin.systemd_service:
+    name: nova-conductor
+    state: restarted
+    enabled: yes
+  become: yes
+
+- name: restart nova-novncproxy
+  ansible.builtin.systemd_service:
+    name: nova-novncproxy
+    state: restarted
+    enabled: yes
+  become: yes
+
+- name: restart nova-compute
+  ansible.builtin.systemd_service:
+    name: nova-compute
+    state: restarted
+    enabled: yes
+  become: yes
+
+- name: restart libvirt.server
+  ansible.builtin.systemd_service:
+    name: libvirtd
+    state: restarted
+    enabled: yes
+  become: yes
+
+- name: restart libvirt.socket
+  ansible.builtin.systemd_service:
+    name: libvirtd.socket
+    state: restarted
+    enabled: yes
+  become: yes
+
+- name: restart libvirt-tcp.socket
+  ansible.builtin.systemd_service:
+    name: libvirtd-tcp.socket
+    state: restarted
+    enabled: yes
+  become: yes
+

@@ -1,0 +1,112 @@
+---
+# ======================================
+#  Cek Keyring Glance dan Setup
+#  =====================================
+
+- name: Cek File ceph.client.glance.keyring apakah sudah ada
+  ansible.builtin.stat:
+    path: /etc/ceph/ceph.client.glance.keyring
+  register: glance_check_keyring
+
+- name: Setup Ceph Client Authentication - Glance
+  ansible.builtin.command: >
+    ceph auth get-or-create client.glance mon 'profile rbd' osd 'profile rbd pool=images' mgr 'profile rbd pool=images'
+  become: yes
+    #  when: not glance_check_keyring.stat.exists
+  changed_when: true
+
+- name: Export keyring ke file untuk glance
+  ansible.builtin.shell: |
+    ceph auth get-or-create client.glance | tee /etc/ceph/ceph.client.glance.keyring
+  become: yes
+    # when: not glance_check_keyring.stat.exists
+  changed_when: true
+
+- name: Set permission keyring Glance
+  ansible.builtin.file:
+    path: /etc/ceph/ceph.client.glance.keyring
+    owner: glance
+    group: glance
+    mode: '0644'
+  become: yes
+  when: not glance_check_keyring.stat.exists
+
+
+# ======================================
+#  Cek Keyring Cinder dan Setup
+#  ====================================
+
+- name: Cek File ceph.client.cinder.keyring apakah sudah ada
+  ansible.builtin.stat:
+    path: /etc/ceph/ceph.client.cinder.keyring
+  register: cinder_check_keyring
+    
+- name: Setup Ceph Client Authentication - Cinder
+  ansible.builtin.command: >
+    ceph auth get-or-create client.cinder mon 'profile rbd' osd 'profile rbd pool=volumes, profile rbd pool=vms, profile rbd-read-only pool=images' mgr 'profile rbd pool=volumes, profile rbd pool=vms'
+  become: yes
+    # when: not cinder_check_keyring.stat.exists
+  changed_when: false
+
+- name: Menambahkan Keyring Untuk Cinder
+  ansible.builtin.shell: |
+    ceph auth get-or-create client.cinder | tee /etc/ceph/ceph.client.cinder.keyring
+  become: yes
+    # when: not cinder_check_keyring.stat.exists
+  changed_when: false
+
+- name: Set permission keyring Cinder
+  ansible.builtin.file:
+    path: /etc/ceph/ceph.client.cinder.keyring
+    owner: cinder
+    group: cinder
+    mode: '0644'
+  become: yes
+  when: not cinder_check_keyring.stat.exists
+    
+# =======================================
+#  Cek Keyring Cinder-Backup dan Setup
+#  =====================================
+
+- name: Cek File ceph.client-backup.keyring apakah sudah ada
+  ansible.builtin.stat:
+    path: /etc/ceph/ceph.client.cinder-backup.keyring
+  register: cinder_backup_check_keyring
+
+- name: Setup Client Authentication - Cinder backup
+  ansible.builtin.command: >
+    ceph auth get-or-create client.cinder-backup mon 'profile rbd' osd 'profile rbd pool=backups' mgr 'profile rbd pool=backups'
+  become: yes
+    #  when: not cinder_backup_check_keyring.stat.exists
+  changed_when: false
+  
+- name: Menambahkan Keyring Untuk Cinder-backup
+  ansible.builtin.shell: |
+    ceph auth get-or-create client.cinder-backup | tee /etc/ceph/ceph.client.cinder-backup.keyring
+  become: yes
+    #  when: not cinder_backup_check_keyring.stat.exists
+  changed_when: false
+
+- name: Set permission keyring Cinder-Backup
+  ansible.builtin.file:
+    path: /etc/ceph/ceph.client.cinder-backup.keyring
+    owner: cinder
+    group: cinder
+    mode: '0644'
+  become: yes
+  when: not cinder_backup_check_keyring.stat.exists
+
+# ==================================================
+#  Verfikasi
+# =================================================
+#
+- name: Verifikasi semua auth client terdaftar
+  ansible.builtin.command: ceph auth ls
+  register: ceph_auth_list
+  become: yes
+  changed_when: false
+
+- name: Tampilkan auth list
+  ansible.builtin.debug:
+    msg: "{{ ceph_auth_list.stdout_lines }}"
+

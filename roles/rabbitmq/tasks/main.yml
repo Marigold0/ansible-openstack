@@ -1,0 +1,26 @@
+---
+- name: Install RabbitMQ
+  ansible.builtin.package:
+    name: rabbitmq-server
+    state: present
+  become: yes
+  notify: Enable RabbitMQ
+
+- name: Cek User RabbitMQ yang ada
+  ansible.builtin.command: >
+    rabbitmqctl list_users
+  register: list_users
+  changed_when: false
+
+- name: RabbitMQ | Menambahkan Openstack User
+  ansible.builtin.command: > 
+    rabbitmqctl add_user {{ rabbit_user }} {{ rabbit_pass }} 
+  when: "'{{ rabbit_user }}' not in list_users.stdout"
+  ignore_errors: yes
+  become: yes
+
+- name: Rabbitmq | Setting Izin User ke Vhost
+  ansible.builtin.command: > 
+    rabbitmqctl set_permissions {{ rabbit_user }} ".*" ".*" ".*"
+  become: yes
+

@@ -1,0 +1,39 @@
+---
+- name: Install Packages
+  ansible.builtin.package:
+    name:
+      - ovn-central
+      - ovn-common
+      - ovn-host
+    state: present
+    update_cache: yes
+      
+      #- name: Enable dan Start ovn-central
+      #  ansible.builtin.systemd_service:
+      #    name: ovn-central
+      #    state: restarted
+      #    enabled: yes
+      #  become: yes
+      #
+      #- name: Enable dan Start ovn-host
+      #  ansible.builtin.systemd_service:
+      #    name: ovn-host
+      #    state: restarted
+      #    enabled: yes
+      #  become: yes
+
+- name: Copy script ovn-host
+  ansible.builtin.template:
+    src: ovn-host.sh.j2
+    dest: "/home/{{ ansible_user }}/ovn-host.sh"
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Execute ovn-host config
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/ovn-host.sh
+  args:
+    executable: /bin/bash
+  become: yes
+

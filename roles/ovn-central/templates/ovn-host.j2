@@ -1,0 +1,10 @@
+OVN_CTL_OPTS= \
+  --db-nb-addr=(IP_Node_ini) \
+  --db-sb-addr=(IP_Node_ini)\
+  --db-sb-create-insecure-remote=yes \
+  --db-nb-cluster-local-addr=(IP_Node_ini) \
+  --db-sb-cluster-local-addr=(IP_Node_ini) \
+  --db-nb-cluster-remote-addr=(IP_Node_Cluster) \
+  --db-sb-cluster-remote-addr=(IP_Node_cluster) \
+  --ovn-northd-nb-db=tcp:(IP_Node1):6641,tcp:(IP_Node2):6641,tcp:(IP_Node3):6641 \
+  --ovn-northd-sb-db=tcp:(IP_Node1):6642,tcp:(IP_Node2):6642,tcp:(IP_Node3):6642 \

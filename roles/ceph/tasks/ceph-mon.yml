@@ -1,0 +1,146 @@
+---
+# ======================
+# Cleanup bootstrap lama
+# ======================
+
+- name: Cek apakah MON sudah pernah di-bootstrap
+  ansible.builtin.stat:
+    path: /var/lib/ceph/mon/ceph-{{ ansible_hostname }}/done
+  register: mon_check
+
+- name: Stop ceph-mon service
+  ansible.builtin.systemd:
+    name: ceph-mon@{{ ansible_hostname }}
+    state: stopped
+  ignore_errors: yes
+  when: not mon_check.stat.exists
+
+- name: Hapus data MON dan mgr lama
+  ansible.builtin.file:
+    path: "{{ file_path }}"
+    state: absent
+  loop:
+    - /var/lib/ceph/mon/ceph-{{ ansible_hostname }}
+      #- /var/lib/ceph/mgr/ceph-{{ inventory_hostname }}
+    - /tmp/monmap
+    - /tmp/ceph.mon.keyring
+  loop_control:
+    loop_var: file_path
+  when: not mon_check.stat.exists
+
+- name: Pastikan direktori MON ada dan permission benar
+  ansible.builtin.file:
+    path: /var/lib/ceph/mon/ceph-{{ ansible_hostname }}
+    state: directory
+    owner: ceph
+    group: ceph
+    mode: '0755'
+  when: not mon_check.stat.exists
+
+# ======================
+# Generate keyring mon
+# ======================
+
+- name: Generate monitor keyring
+  ansible.builtin.command: >
+    ceph-authtool --create-keyring /tmp/ceph.mon.keyring
+    --gen-key -n mon. --cap mon 'allow *'
+  when: not mon_check.stat.exists
+  become: yes
+
+- name: Generate admin keyring
+  ansible.builtin.command: >
+    ceph-authtool --create-keyring /etc/ceph/ceph.client.admin.keyring
+    --gen-key -n client.admin
+    --cap mon 'allow *'
+    --cap osd 'allow *'
+    --cap mds 'allow *'
+    --cap mgr 'allow *'
+  when: not mon_check.stat.exists
+  become: yes
+
+- name: Generate bootstrap-osd keyring
+  ansible.builtin.command: >
+    ceph-authtool --create-keyring /var/lib/ceph/bootstrap-osd/ceph.keyring
+    --gen-key -n client.bootstrap-osd
+    --cap mon 'profile bootstrap-osd' --cap mgr 'allow r'
+  when: not mon_check.stat.exists
+  become: yes
+
+- name: Gabungkan keyring ke mon keyring
+  ansible.builtin.shell: |
+    ceph-authtool /tmp/ceph.mon.keyring \
+      --import-keyring /etc/ceph/ceph.client.admin.keyring
+    ceph-authtool /tmp/ceph.mon.keyring \
+      --import-keyring /var/lib/ceph/bootstrap-osd/ceph.keyring
+  when: not mon_check.stat.exists
+  become: yes
+
+- name: Set permission keyring
+  ansible.builtin.file:
+    path: "{{ set_file.path }}"
+    owner: ceph
+    group: ceph
+    mode: "{{ set_file.mode }}"
+  loop:
+    - { path: /tmp/ceph.mon.keyring,                          mode: '0644' }
+ #- { path: /etc/ceph/ceph.client.admin.keyring,            mode: '0640' }
+      #- { path: /var/lib/ceph/bootstrap-osd/ceph.keyring,       mode: '0640' }
+      #    - { path: /var/lib/ceph/mon/ceph-{{ inventory_hostname }}/store.db}
+  loop_control:
+    loop_var: set_file
+  when: not mon_check.stat.exists
+  become: yes
+
+- name: Generate monitor map
+  ansible.builtin.command: >
+    monmaptool --create --clobber --add {{ ansible_hostname }} {{ ceph_mon_host }} --fsid {{ ceph_fsid }} /tmp/monmap
+  when: not mon_check.stat.exists
+  become: yes
+
+- name: Populate monitor
+  ansible.builtin.command: >
+    sudo -u ceph ceph-mon --cluster ceph --mkfs -i {{ ansible_hostname }} --monmap /tmp/monmap --keyring /tmp/ceph.mon.keyring
+  when: not mon_check.stat.exists
+
+- name: Start dan enable ceph-mon
+  ansible.builtin.service:
+    name: ceph-mon@{{ ansible_hostname }}
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Activate msgr2
+  ansible.builtin.command: >
+    ceph mon enable-msgr2
+  become: yes
+  run_once: true
+  changed_when: false
+
+# =========================
+# Verfikasi
+#
+
+- name: Tunggu MON siap
+  ansible.builtin.command: ceph status
+  register: ceph_status
+  until: "'mon:' in ceph_status.stdout"
+  retries: 15
+  delay: 5
+  become: yes
+  changed_when: false
+
+- name: Tampilkan status awal Ceph
+  ansible.builtin.debug:
+   msg: "{{ ceph_status.stdout_lines }}"
+
+- name: Tandai MON sebagai done
+  ansible.builtin.file:
+    path: /var/lib/ceph/mon/ceph-{{ ansible_hostname }}/done
+    state: touch
+    owner: ceph
+    group: ceph
+  become: yes
+  when: not mon_check.stat.exists
+
+

@@ -1,0 +1,138 @@
+---
+# =========================================================
+#
+# PREREQUISITIES
+#
+#==========================================================
+- name: Cek User cinder Apakah Sudah Ada
+  ansible.builtin.shell: | 
+    source /home/{{ ansible_user }}/admin-openrc  && 
+    openstack user list --format value -c Name
+  args:
+    executable: /bin/bash
+  register: check_user
+  become: yes
+
+- name: Membuat User Cinder Untuk Storage Service Credentials
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack user create --domain default --password {{ cinder_db_pass }} cinder
+  args:
+    executable: /bin/bash
+  become: yes
+  when: "'cinder' not in check_user.stdout"
+  changed_when: false
+
+- name: Menambahkan Role Admin ke User Cinder di Project Service
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack role add --project service --user cinder admin
+  args:
+    executable: /bin/bash
+  become: yes
+
+- name: Cek Cinder Service Apakah Sudah Ada
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack service list --format value -c Name
+  args:
+    executable: /bin/bash
+  become: yes
+  register: existing_service
+  changed_when: false
+
+- name: Membuat Cinder Service entity
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack service create --name cinderv3 --description "Openstack Block Storage" volumev3
+  args:
+    executable: /bin/bash
+  become: yes
+  when: "'cinderv3' not in existing_service.stdout"
+  changed_when: false
+
+- name: Cek Endpoint Storage API Service
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack endpoint list --service cinderv3 --format value -c ID
+  args:
+    executable: /bin/bash
+  register: existing_endpoint
+  become: yes
+  changed_when: false
+
+- name: Membuat Endpoint Compute API Service
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack endpoint create --region RegionOne volumev3 public http://{{ public_ip }}:8776/v3/%\(project_id\)s && openstack endpoint create --region RegionOne volumev3 internal http://{{ internal_ip }}:8776/v3/%\(project_id\)s && openstack endpoint create --region RegionOne volumev3 admin http://{{ admin_ip }}:8776/v3/%\(project_id\)s
+  args:
+    executable: /bin/bash
+  become: yes
+  when: existing_endpoint.stdout == ""
+  changed_when: false
+
+# ==============================================
+#  INSTALL DAN KONFIGURASI CINDER
+#  ============================================
+
+- name: Install Package Cinder
+  ansible.builtin.apt:
+    name:
+      - cinder-api
+      - cinder-scheduler
+      - cinder-volume
+      - tgt
+      - cinder-backup
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Ubah Kepemilikan File Cinder
+  ansible.builtin.file:
+    path: /etc/ceph/ceph.client.cinder.keyring
+    owner: cinder
+    group: cinder
+    mode: '0644'
+  become: yes
+
+- name: Ubah Kepemilikan File Cinder.backup
+  ansible.builtin.file:
+    path: /etc/ceph/ceph.client.cinder-backup.keyring
+    owner: cinder
+    group: cinder
+    mode: '0644'
+  become: yes
+
+- name: Konfigurasi cinder.conf
+  ansible.builtin.template:
+    src: cinder-aio.conf.j2
+    dest: /etc/cinder/cinder.conf
+    owner: root
+    group: cinder
+    mode: '0644'
+  become: yes
+  changed_when: true
+  notify:
+    - restart nova-api
+    - restart cinder-scheduler
+    - restart apache2
+
+- name: Populate Database Cinder 
+  ansible.builtin.shell: |
+   su -s /bin/sh -c "cinder-manage db sync" cinder
+  args:
+    executable: /bin/bash
+  become: yes
+  notify:
+    - restart nova-api
+      #    - restart cinder-api
+    - restart cinder-scheduler 
+    - restart apache2
+    - restart cinder-backup
+
+- name: Verfikasi Cinder - Tampilkan Image list
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack volume service list
+  args:
+    executable: /bin/bash
+  become_user: "{{ ansible_user }}"
+  register: cinder_list
+  changed_when: false
+
+- name: Verifikasi Cinder - Debug Volume Service List
+  ansible.builtin.debug:
+    msg: "{{ cinder_list.stdout_lines }}"

@@ -1,0 +1,85 @@
+---
+- name: Cek User Placement
+  ansible.builtin.shell: | 
+    source /home/{{ ansible_user }}/admin-openrc && openstack user list -f value -c Name
+  args:
+    executable: /bin/bash
+  register: check_user
+
+- name: Membuat User Placement
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack user create --domain default --password placement placement
+  args:
+    executable: /bin/bash
+  become: yes
+  when: "'placement' not in check_user.stdout"
+  changed_when: true
+
+- name: Menambahhkan User Ke Project Dengan Admin Role
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack role add --project service --user placement admin
+  args:
+    executable: /bin/bash
+  become: yes
+  when: "'placement' not in check_user.stdout"
+  changed_when: true
+
+- name: Cek Service Placement
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack service list -f value -c Name
+  args:
+    executable: /bin/bash
+  register: existing_service
+
+- name: Membuat Service Placement API Entry 
+  ansible.builtin.shell: | 
+    source /home/{{ ansible_user }}/admin-openrc && openstack service create --name placement --description "Placement API" placement
+  args:
+    executable: /bin/bash
+  become: yes
+  when: "'placement' not in existing_service.stdout"
+  changed_when: true
+
+- name: Check Endpoint apakah sudah ada
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack endpoint list --service placement -f value -c ID
+  args:
+    executable: /bin/bash
+  register: check_endpoint
+
+- name: Membuat Placement API Service
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && 
+    openstack endpoint create --region RegionOne placement public http://{{ public_ip }}:8778 && 
+    openstack endpoint create --region RegionOne placement internal http://{{ internal_ip }}:8778 && 
+    openstack endpoint create --region RegionOne placement admin http://{{ admin_ip }}:8778
+  args:
+    executable: /bin/bash
+  when: check_endpoint.stdout == "" 
+  changed_when: false
+
+- name: Install Package Placement
+  ansible.builtin.apt:
+    name: placement-api
+    state: present
+    update_cache: true
+  become: yes
+
+- name: Konfigurasi Placement
+  ansible.builtin.template:
+    src: placement.conf.j2
+    dest: /etc/placement/placement.conf
+    owner: root
+    group: placement
+    mode: '0640'
+  become: yes
+
+- name: Populate Placement Database
+  ansible.builtin.command: >
+    su -s /bin/sh -c "placement-manage db sync" placement
+  changed_when: true
+  notify: restart apache2
+
+- name: Tunggu Placement dan Apache2 Siap
+  ansible.builtin.pause:
+    seconds: 30

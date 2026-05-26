@@ -1,0 +1,153 @@
+---
+- name: Cek User Nova Apakah Sudah Ada
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc &&  openstack user list --format value -c Name
+  args:
+    executable: /bin/bash
+  register: check_user
+  changed_when: false
+
+- name: Membuat User Nova Untuk Compute Service Credential
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && 
+    openstack user create --domain default --password {{ nova_db_pass }} nova
+  args:
+    executable: /bin/bash
+  become: yes
+  when: "'nova' not in check_user.stdout"
+  changed_when: true
+
+- name: Menambahkan Role Admin ke User Nova di Project Service
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack role add --project service --user nova admin
+  args:
+    executable: /bin/bash
+  become: yes
+  changed_when: false
+
+- name: Cek Nova Service Apakah Sudah Ada
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack service list --format value -c Name
+  args:
+    executable: /bin/bash
+  become: yes
+  register: existing_service
+  changed_when: false
+
+- name: Membuat Nova Service Entity
+  ansible.builtin.shell: |
+   source /home/{{ ansible_user }}/admin-openrc && openstack service create --name nova --description "Openstack Compute" compute
+  args:
+    executable: /bin/bash
+  become: yes
+  when: "'nova' not in existing_service.stdout"
+  changed_when: false
+
+- name: Cek Endpoint Compute API Service
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack endpoint list --service nova --format value -c ID
+  args:
+    executable: /bin/bash
+  register: existing_endpoint
+  become: yes
+  changed_when: false
+
+- name: Membuat Endpoint Compute API Service
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && 
+    openstack endpoint create --region RegionOne compute public http://{{ public_ip }}:8774/v2.1 && 
+    openstack endpoint create --region RegionOne compute internal http://{{ internal_ip }}:8774/v2.1 &&
+    openstack endpoint create --region RegionOne compute admin http://{{ admin_ip }}:8774/v2.1
+  args:
+    executable: /bin/bash
+  become: yes
+  when: existing_endpoint.stdout == ""
+
+- name: Install Package
+  ansible.builtin.apt:
+    name:
+      - nova-api
+      - nova-conductor
+      - nova-novncproxy
+      - nova-scheduler
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Konfigurasi Nova Controller
+  ansible.builtin.template:
+    src: nova.conf.j2
+    dest: /etc/nova/nova.conf
+    owner: root
+    group: nova
+    mode: '0640'
+    backup: yes
+  become: yes
+
+- name: Populate Database Nova-api
+  ansible.builtin.command: >
+    su -s /bin/sh -c "nova-manage api_db sync" nova
+  changed_when: true
+
+- name: Populate Database cell0
+  ansible.builtin.command: >
+    su -s /bin/sh -c "nova-manage cell_v2 map_cell0" nova
+  changed_when: true
+
+- name: Populate Database cell1
+  ansible.builtin.command: >
+    su -s /bin/sh -c "nova-manage cell_v2 create_cell --name=cell1 --verbose" nova
+  register: create_cell1
+  changed_when: create_cell1.rc == 0
+  failed_when:
+    - create_cell1.rc != 0
+    - "'already exists for another cell' not in create_cell1.stdout"
+
+- name: Populate Database Nova
+  ansible.builtin.command: >
+    su -s /bin/sh -c "nova-manage db sync" nova
+
+- name: List Cell0 dan Cell1 
+  ansible.builtin.command: >
+    su -s /bin/sh -c "nova-manage cell_v2 list_cells" nova
+  register: list_cell0
+
+- name: Verfiy nova cell0 dan cell1 
+  ansible.builtin.debug:
+    msg: "{{ list_cell0.stdout_lines }}"
+      #  notify:
+      #    - restart nova-api
+      #    - restart nova-scheduler
+      #    - restart nova-conductor
+      #    - restart novncproxy
+      #
+      # 
+
+- name: Restart Service nova-api
+  ansible.builtin.systemd_service:
+    name: nova-api
+    state: restarted
+    enabled:
+  become: yes
+
+- name: Restart Service nova-sheduler
+  ansible.builtin.systemd_service:
+    name: nova-scheduler
+    state: restarted
+    enabled:
+  become: yes
+
+- name: Restart Service nova-conductor
+  ansible.builtin.systemd_service:
+    name: nova-conductor
+    state: restarted
+    enabled:
+  become: yes
+
+- name: Restart Service nova-novncproxy
+  ansible.builtin.systemd_service:
+    name: nova-novncproxy
+    state: restarted
+    enabled:
+  become: yes
+

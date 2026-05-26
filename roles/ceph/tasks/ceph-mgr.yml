@@ -1,0 +1,87 @@
+---
+- name: Cek apakah MGR keyring sudah ada
+  ansible.builtin.stat:
+    path: /var/lib/ceph/mgr/ceph-{{ ansible_hostname }}/keyring
+  register: mgr_keyring
+
+# ==========================
+#  Cleanup MGR jika belum ada
+# ==========================
+- name: Hapus direktori MGR lama
+  ansible.builtin.file:
+    path: /var/lib/ceph/mgr/ceph-{{ ansible_hostname }}
+    state: absent
+  when: not mgr_keyring.stat.exists
+
+- name: Buat direktori MGR
+  ansible.builtin.file:
+    path: /var/lib/ceph/mgr/ceph-{{ ansible_hostname }}
+    state: directory
+    owner: ceph
+    group: ceph
+    mode: '0755'
+  when: not mgr_keyring.stat.exists
+
+# ==========================
+#  Generate keyring
+# ==========================
+- name: Generate MGR keyring
+  ansible.builtin.command: >
+    ceph auth get-or-create mgr.{{ ansible_hostname }}
+    mon 'allow profile mgr'
+    osd 'allow *'
+    mds 'allow *'
+    -o /var/lib/ceph/mgr/ceph-{{ ansible_hostname }}/keyring
+  become: yes
+  when: not mgr_keyring.stat.exists
+
+- name: Set permission MGR keyring
+  ansible.builtin.file:
+    path: /var/lib/ceph/mgr/ceph-{{ ansible_hostname }}/keyring
+    owner: ceph
+    group: ceph
+    mode: '0640'
+
+# ==========================
+#  Start MGR
+# ==========================
+#- name: Tunggu MON Stable Sebelum Start MGR
+#  ansible.builtin.command: ceph_quorum_status
+#  register: quorum_check
+#  until: quorum_check.rc == 0
+#  retries: 12
+#  delay: 5
+#  become: yes
+#  changed_when: false
+#
+- name: Reset Failed State ceph-mgr
+  ansible.builtin.command: >
+    systemctl reset-failed ceph-mgr@{{ ansible_hostname }}
+  changed_when: false
+  ignore_errors: yes
+  become: yes
+
+- name: Start dan Enable ceph-mgr
+  ansible.builtin.systemd_service:
+    name: ceph-mgr@{{ ansible_hostname }}
+    state: restarted
+    enabled: yes
+  become: yes
+
+# ==========================
+#  Verifikasi
+# ==========================
+- name: Tunggu MGR siap
+  ansible.builtin.command: ceph status
+  register: ceph_status
+  until: "'mgr:' in ceph_status.stdout"
+  retries: 15
+  delay: 5
+  become: yes
+  changed_when: false
+
+- name: Tampilkan status Ceph
+  ansible.builtin.debug:
+    msg: "{{ ceph_status.stdout_lines }}"
+
+

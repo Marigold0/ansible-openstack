@@ -1,0 +1,80 @@
+---
+- name: Install Nova-compute
+  ansible.builtin.apt:
+    name: nova-compute
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Konfig nova.conf
+  ansible.builtin.template:
+    src: nova.conf.j2
+    dest: /etc/nova/nova.conf
+    owner: root
+    group: nova
+    mode: '0640'
+  become: yes
+
+- name: Konfig nova-compute.conf
+  ansible.builtin.template:
+    src: nova-compute.conf.j2
+    dest: /etc/nova/nova-compute.conf
+    owner: root
+    group: nova
+    mode: '0640'
+  become: yes
+    #  notify: 
+    #    - restart nova-compute
+    #    - restart nova-api
+    #    - restart nova-scheduler
+    #    - restart nova-novncproxy
+    #
+- name: Tambah user nova ke group
+  user:
+    name: nova
+    groups:
+      - cinder
+      - glance
+      - neutron
+    append: true
+  become: yes
+
+- name: Restart Nova-compute
+  ansible.builtin.systemd_service:
+    name: nova-compute
+    state: restarted
+    enabled: yes
+  become: yes
+
+- name: Tunggu Nova Compute Active
+  ansible.builtin.pause:
+    seconds: 30
+
+- name: Cek Compute Node Sudah UP 
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack compute service list
+  args:
+    executable: /bin/bash
+  register: service_list
+  become: yes
+  changed_when: false
+
+- name: Debug msg
+  ansible.builtin.debug:
+    msg: "{{ service_list.stdout_lines }}"
+
+- name: Cek Apakah Host Sudah Ada di Cell Database
+  ansible.builtin.command: >
+    su -s /bin/sh -c "nova-manage cell_v2 list_hosts" nova
+  register: cell_list
+  become: yes
+  changed_when: false
+
+- name: Menambahkan Compute Node Ke Cell Database
+  ansible.builtin.command: >
+    su -s /bin/sh -c "nova-manage cell_v2 discover_hosts --verbose" nova
+  when: "'ansible_hostname' not in cell_list.stdout"
+  become: yes
+  changed_when: false
+
+

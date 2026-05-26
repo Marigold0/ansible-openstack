@@ -1,0 +1,4 @@
+---
+- name: Import Task neutron
+  ansible.builtin.include_tasks: "{{ item }}"
+  loop: "{{ neutron_components }}"

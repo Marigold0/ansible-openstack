@@ -1,0 +1,210 @@
+- name: Setup Ke Apt Repo Local
+  hosts: all
+  gather_facts: true
+  become: yes 
+  tags: local-repo
+  roles:
+    - role: local-repo
+      when: airgap_enable | bool
+
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Memastikan Ansible collections yang dibutuhkan ada
+      ansible.builtin.command: ansible-galaxy collection install -r requirements.yml -p /openstack-airgap/galaxy-offline/
+      changed_when: false
+      become: yes
+      run_once: true
+
+- name: Deploy OpenStack AIO - Environment
+  hosts: controller_group
+  become: yes
+  tags: environment
+
+  pre_tasks:
+    - name: Info awal deployment
+      ansible.builtin.debug:
+        msg: |
+          - "=================================================================="
+          - "Deploy OpenStack AIO + Ceph"
+          - "Host : {{ inventory_hostname }}"
+          - "IP   : {{ ansible_host }}"
+          - "OS   : {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "=================================================================="
+
+  roles:
+    - { role: ntp,       tags: ntp       }
+    - { role: common,    tags: common    }
+    - { role: mariadb,   tags: mariadb   }
+    - { role: rabbitmq,  tags: rabbitmq  }
+    - { role: memcached, tags: memcached }
+    - { role: ovs, tags: ovs             }
+
+- name: Install ovn-central
+  hosts: controller_group
+  become: yes
+  tags: ovn-central
+  roles:
+    - { role: ovn-central,   tags: ovn-central }
+
+- name: Install ovn-host
+  hosts: compute_group
+  become: yes
+  tags: ovn-host
+  roles:
+    - { role: ovn-host,     tags: ovn-host}
+
+
+- name: Install Ceph Storage & Mon
+  hosts: controller_group
+  gather_facts: true
+  become: true
+  tags: ceph
+  roles:
+    - role: ceph
+      tags:
+        - ceph
+        - ceph-mon
+        - ceph-mgr
+      vars:
+        ceph_components:
+          - ceph-mon.yml
+          - ceph-mgr.yml
+          - ceph-osd.yml
+
+- name: Setup OSD & Pools
+  hosts: controller_group
+  become: true
+  tags: ceph
+  roles:
+    - role: ceph
+      tags:
+        - ceph-pool
+        - ceph-auth
+      vars:
+        ceph_components:
+          - ceph-pool.yml
+          - ceph-auth.yml
+
+- name: Setup Auth Compute
+  hosts: compute_group
+  gather_facts: true
+  become: true
+  tags: ceph
+  roles:
+    - role: ceph
+      tags: 
+        - ceph-compute
+      vars:
+        ceph_components:
+          - ceph-compute.yml
+
+- name: Crushmap Setting untuk AIO
+  hosts: controller_group
+  tags: ceph
+  become: yes
+  tasks:
+    - name: Crusmap Rule agar OSD bisa Replikasi
+      ansible.builtin.command: >
+        ceph osd crush rule create-replicated replicated_rule_osd default osd
+      become: yes 
+
+- name: Apply rule untuk AIO
+  hosts: controller_group
+  tags: ceph
+  become: yes
+  tasks:
+    - name: Apply Rule ke Pools
+      ansible.builtin.shell: | 
+        for pool in .mgr volumes images backups vms; do
+          sudo ceph osd pool set $pool crush_rule replicated_rule_osd
+        done
+      args:
+        executable: /bin/bash
+      become: yes
+
+- name: Install Openstack Komponen
+  hosts: controller_group
+  gather_facts: true
+  tags: openstack
+  become: yes
+    #  serial: 2
+  roles:
+    - { role: keystone,   tags: keystone }
+    - { role: glance,     tags: glance }
+    - { role: placement,  tags: placement }
+
+- name: Install Nova Controller
+  hosts: controller_group
+  gather_facts: true
+  become: true
+  tags: openstack
+  roles:
+    - role: nova
+      tags:
+        - nova-controller
+      vars:
+        nova_components:
+          - nova-controller.yml
+
+- name: Install Nova Compute Service
+  hosts: compute_group
+  gather_facts: true
+  become: true
+  tags: openstack
+  roles:
+    - role: nova
+      tags:
+        - nova-compute
+      vars:
+        nova_components:
+          - libvirt.yml
+          - nova-compute.yml
+
+- name: Install Neutron Network Controller Service
+  hosts: controller_group
+  gather_facts: true
+  become: yes
+  tags: openstack
+  roles:
+    - role: neutron
+      tags:
+        - neutron-controller
+      vars:
+        neutron_components:
+          - neutron-controller.yml
+
+- name: Install Neutron Network Compute Service
+  hosts: compute_group
+  gather_facts: true
+  become: yes
+  tags: openstack
+  roles:
+    - role: neutron
+      tags:
+        - neutron-compute
+      vars:
+        neutron_components:
+          - neutron-compute.yml
+
+- name: Install Cinder Pada Controller Node
+  hosts: controller_group
+  gather_facts: true
+  become: yes
+  tags: openstack
+  roles:
+    - role: cinder
+      tags:
+        - cinder-controller
+      vars:
+        cinder_components:
+          - cinder-controller.yml
+
+- name: Install Horizon
+  hosts: controller_group
+  gather_facts: true
+  become: yes
+  tags: Horizon
+  roles:
+    - role: horizon
+      tags: horizon

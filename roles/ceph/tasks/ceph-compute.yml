@@ -1,0 +1,103 @@
+---
+- name: Install Package Ceph 
+  ansible.builtin.apt:
+    name:
+      - ceph-common
+      - ceph-mgr
+      - ceph-mon
+      - ceph-osd
+      - python3-ceph-common
+      - qemu-kvm 
+      - libvirt-daemon-system
+      - libvirt-clients
+      - virt-manager 
+      - bridge-utils
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Cek File ceph.client.cinder.keyring Apakah Sudah Ada Pada Compute Node
+  ansible.builtin.stat:
+    path: /etc/ceph/ceph.client.cinder.keyring
+  register: cinder_check_keyring
+
+- name: Ambil file dari controller
+  ansible.builtin.shell: |
+    ceph auth get-key client.cinder
+  args:
+    executable: /bin/bash
+  register: get_keyring
+  delegate_to: "{{ groups['controller_group'][0] }}"
+  run_once: true
+  when: not cinder_check_keyring.stat.exists
+
+- name: Copy File ke Compute
+  copy:
+    content: "{{ get_keyring.stdout }}"
+    dest: /etc/ceph/ceph.client.cinder.keyring
+  when: not cinder_check_keyring.stat.exists
+
+- name: Cek Apakah Secret Sudah Ada
+  ansible.builtin.shell: |
+    virsh secret-list
+  args:
+    executable: /bin/bash
+  register: secret_check
+  become: yes
+  changed_when: false
+
+- name: Buat Secret Key Pada Compute Node
+  ansible.builtin.shell: |
+   cat > /home/{{ ansible_user }}/secret.xml <<EOF
+   <secret ephemeral='no' private='no'>
+     <uuid>{{ rbd_secret_id }}</uuid>
+     <usage type='ceph'>
+       <name>client.cinder secret</name>
+     </usage>
+   </secret>
+   EOF
+  args:
+    executable: /bin/bash
+  become: yes
+  when: "'client.cinder' not in secret_check.stdout"
+  changed_when: false
+
+- name: Define File secret.xml ke Libvirt
+  ansible.builtin.shell: |
+    virsh secret-define --file /home/{{ ansible_user }}/secret.xml
+  args:
+    executable: /bin/bash
+  become: yes
+    #  register: define_secret
+  when: "'client.cinder' not in secret_check.stdout"
+  changed_when: false
+
+- name: Set Value Secret
+  ansible.builtin.shell: |
+    virsh secret-set-value --secret {{ rbd_secret_id }} --base64 $(grep 'key' /etc/ceph/ceph.client.cinder.keyring | awk '{print $NF}')   
+  args:
+    executable: /bin/bash
+  become: yes
+    #  when: "'client.cinder' not in secret_check.stdout"
+  changed_when: true
+
+- name: Verifikasi secret terdaftar di libvirt
+  ansible.builtin.command: virsh secret-list
+  register: final_secret_list
+  become: yes
+  changed_when: false
+
+- name: Tampilkan secret list
+  ansible.builtin.debug:
+    msg: "{{ final_secret_list.stdout_lines }}"
+
+- name: Test koneksi Ceph dari Compute
+  ansible.builtin.command: ceph -s --id cinder
+  become: yes
+  changed_when: false
+  failed_when: false
+  register: ceph_conn_test
+
+- name: Tampilkan hasil koneksi test
+  ansible.builtin.debug:
+    msg: "{{ ceph_conn_test.stdout_lines }}"  

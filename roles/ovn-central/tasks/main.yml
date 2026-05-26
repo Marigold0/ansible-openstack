@@ -1,0 +1,52 @@
+---
+- name: Install Packages
+  ansible.builtin.package:
+    name:
+      - ovn-central
+      - ovn-common
+    state: present
+    update_cache: yes
+
+- name: Stop OVN Northbound
+  ansible.builtin.systemd_service:
+    name: ovn-northd
+    state: stopped
+  become: yes
+
+- name: Enable dan Start ovn-central
+  ansible.builtin.systemd_service:
+    name: ovn-central
+    state: stopped
+    enabled: yes
+  become: yes
+
+- name: Konfigurasi cluster-central
+  ansible.builtin.template:
+    src: ovn-central.j2
+    dest: /etc/default/ovn-central
+    owner: root
+    group: root
+    mode: '0644'  
+  become: yes
+
+- name: Enable dan Start ovn-central
+  ansible.builtin.systemd_service:
+    name: ovn-central
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Enable dan Start ovn-northd
+  ansible.builtin.systemd_service:
+    name: ovn-northd
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Mengatur OpenFlow untuk OVS
+  ansible.builtin.command: >
+    sudo ovs-vsctl set bridge br-int protocols=OpenFlow10,OpenFlow13,OpenFlow14,OpenFlow15
+  become: yes
+  changed_when: false
+  notify:
+    - restart ovn-controller

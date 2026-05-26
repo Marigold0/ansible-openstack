@@ -1,0 +1,30 @@
+---
+- name: Restart dan Enable ovn-central
+  ansible.builtin.systemd_service:
+    name: ovn-central
+    state: restarted
+    enabled: yes
+
+- name: Restart dan Enable ovn-host
+  ansible.builtin.systemd_service:
+    name: ovn-host
+    state: restarted
+    enabled: yes
+
+- name: Restart dab Enable ovsdb
+  ansible.builtin.systemd_service:
+    name: ovsdb-server
+    state: restarted
+    enabled: yes
+
+- name: Restart dan Enable openvswitch
+  ansible.builtin.systemd_service:
+    name: openvswitch-switch
+    state: restarted
+    enabled: yes
+
+- name: restart ovn-controller
+  ansible.builtin.systemd_service:
+    name: ovn-controller
+    state: restarted
+    enabled: yes

@@ -1,0 +1,31 @@
+---
+- name: Install Memcached
+  ansible.builtin.package:
+    name:
+      - memcached
+      - python3-memcache
+    state: present
+
+- name: Konfigurasi Memcached
+  ansible.builtin.template:
+     src: memcached.conf.j2
+     dest: /etc/memcached.conf
+     owner: root
+     group: root
+     mode: '0644'
+  become: yes
+  notify:
+    - Enable Memcached
+    - Restart Memcached
+
+      #- name: Konfigurasi Memcached untuk listen pada management IP
+      #  lineinfile:
+      #    path: /etc/memcached.conf
+      #    regexp: '^-l'
+      #    line: "-l {{ memcached_bind_address }}"
+      #    state: present
+      #    backup: yes
+      #  notify:
+      #    - Enable Memcached
+      #    - Restart Memcached
+

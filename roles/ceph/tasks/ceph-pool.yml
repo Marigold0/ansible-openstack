@@ -1,0 +1,127 @@
+---
+- name: Check Pool yang Sudah Ada
+  ansible.builtin.command: >
+    ceph osd lspools --format json
+  register: pool_check
+  become: yes
+  changed_when: false
+
+- name: Set fact existing pools
+  ansible.builtin.set_fact:
+    existing_pools: "{{ pool_check.stdout | from_json | map(attribute='poolname') | list }}"
+
+- name: Debug Existing Pools
+  ansible.builtin.debug:
+    msg: "Pool yang sudah ada: {{ existing_pools }}"
+
+- name: Membuat Pool untuk OpenStack
+  ansible.builtin.command: >
+    ceph osd pool create {{ cret_pool_osd }}
+  loop:
+    - volumes
+    - images
+    - backups
+    - vms
+  loop_control:
+    loop_var: cret_pool_osd
+  become: yes
+  when: cret_pool_osd not in existing_pools
+  changed_when: true
+
+- name: Refresh pool list
+  ansible.builtin.command: ceph osd lspools --format json
+  register: pool_check_after
+  become: yes
+  changed_when: false
+
+- name: Update fact existing pools
+  ansible.builtin.set_fact:
+    existing_pools: "{{ pool_check_after.stdout | from_json | map(attribute='poolname') | list }}"
+
+- name: Cek application yang sudah ter-enable per pool
+  ansible.builtin.command: ceph osd pool application get {{ ck_pool }}
+  register: pool_app_check
+  loop:
+    - volumes
+    - images
+    - backups
+    - vms
+  loop_control:
+    loop_var: ck_pool
+  become: yes
+  changed_when: false
+  failed_when: false
+
+- name: Initialized Pool
+  ansible.builtin.command: >
+    rbd pool init {{ rbd_pol.rbd_pol }}
+  loop:
+    - volumes
+    - images
+    - backups
+    - vms
+  loop_control:
+    loop_var: rbd_pol
+  become: yes
+  when: 
+    - rbd_pol not in existing_pools
+    - '"rbd" not in (ck_pool.stdout | default(""))'
+  changed_when: true
+  failed_when:
+    - rbd_init.rc != 0
+    - '"already initialized" not in (rbd_init.stderr | default(""))'
+
+- name: Enable aplikasi RBD pada pool
+  ansible.builtin.command: >
+    ceph osd pool application enable {{ enable_app.ck_pool }} rbd
+  loop: "{{ pool_app_check.results }}"
+  loop_control:
+    loop_var: enable_app
+  become: yes
+  when:
+    - enable_app.ck_pool in existing_pools
+    - '"rbd" not in (enable_app.stdout | default(""))'
+  changed_when: true
+  failed_when: false
+
+- name: Set PG autoscale mode
+  ansible.builtin.command: >
+    ceph osd pool set {{ pg_pool }} pg_autoscale_mode on
+  loop:
+    - volumes
+    - images
+    - backups
+    - vms
+  loop_control:
+    loop_var: pg_pool
+  become: yes
+  when: pg_pool in existing_pools
+  changed_when: false
+  failed_when: false
+
+- name: Atur insecure global_id reclaim
+  ansible.builtin.command: ceph config set mon auth_allow_insecure_global_id_reclaim false
+  become: yes
+  changed_when: false
+
+- name: Verifikasi semua pool ada
+  ansible.builtin.command: ceph osd lspools
+  register: final_pool_list
+  become: yes
+  changed_when: false
+
+- name: Tampilkan pool list
+  ansible.builtin.debug:
+    msg: "{{ final_pool_list.stdout_lines }}"
+
+- name: Cek health Ceph setelah pool dibuat
+  ansible.builtin.command: ceph health detail
+  register: ceph_health
+  become: yes
+  changed_when: false
+
+- name: Tampilkan health Ceph
+  ansible.builtin.debug:
+    msg: "{{ ceph_health.stdout_lines }}"
+
+

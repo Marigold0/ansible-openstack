@@ -1,0 +1,11 @@
+---
+- name: Restart Memcached
+  service:
+    name: memcached
+    state: restarted
+
+- name: Enable Memcached
+  ansible.builtin.systemd_service:
+    name: memcached
+    state: started
+    enabled: yes

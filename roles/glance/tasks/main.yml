@@ -1,0 +1,191 @@
+---
+- name: Install Package Glance
+  ansible.builtin.apt:
+    name: glance
+    state: present
+    update_cache: true
+  become: yes
+
+- name: Ubah Kepemilikan File Glance
+  ansible.builtin.file:
+    path: /etc/ceph/ceph.client.glance.keyring 
+    owner: glance
+    group: glance
+    mode: '0644'
+  become: yes           
+
+# ================================
+#  Openstack Glance
+#  ===============================
+
+- name: Cek User Nova Apakah Sudah Ada
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc &&  openstack user list --format value -c Name
+  args:
+    executable: /bin/bash
+  register: check_user
+  changed_when: false
+
+- name: Membuat User Glance
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack user create --domain default --password {{ glance_db_pass }} glance
+  args:
+    executable: /bin/bash
+  become: yes
+  changed_when: false
+  ignore_errors: true
+  when: "'glance' not in check_user.stdout"
+
+- name: Menambahkan admin role ke glance user dan service project
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack role add --project service --user glance admin
+  args:
+    executable: /bin/bash
+  become: yes
+  changed_when: false
+  ignore_errors: true
+
+- name: Cek apakah glance service sudah ada
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc
+    openstack service list --format value -c Name
+  args:
+    executable: /bin/bash
+  become_user: "{{ ansible_user }}"
+  register: existing_services
+  changed_when: false
+
+- name: Membuat glance Service
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack service create --name glance --description "Openstack Image" image
+  args:
+    executable: /bin/bash
+  become: yes
+  changed_when: false
+  when: "'glance' not in existing_services.stdout"
+
+- name: Cek apakah endpoint glance sudah ada
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc
+    openstack endpoint list --service glance --format value -c ID
+  args:
+    executable: /bin/bash
+  become_user: "{{ ansible_user }}"
+  register: existing_endpoints
+  changed_when: false
+
+- name: Membuat Image Service API
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack endpoint create --region RegionOne image public http://{{ public_ip }}:9292 && openstack endpoint create --region RegionOne image internal http://{{ internal_ip }}:9292 && openstack endpoint create --region RegionOne image admin http://{{ admin_ip }}:9292
+  args: 
+    executable: /bin/bash
+  become: yes
+  changed_when: false
+  when: existing_endpoints.stdout == ""
+
+- name: Ambil endpoint ID glance internal
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc &&
+    openstack endpoint list \
+      --service glance \
+      --interface internal \
+      -f value -c ID
+  args:
+    executable: /bin/bash
+  become_user: "{{ ansible_user }}"
+  register: glance_endpoint_id
+  changed_when: false
+
+- name: Debug Endpoint ID Glance
+  ansible.builtin.debug:
+    msg: "Glance endpoint ID: {{ glance_endpoint_id.stdout }}"
+
+- name: Konfigurasi Glance-api
+  ansible.builtin.template:
+    src: glance-api.conf.j2
+    dest: /etc/glance/glance-api.conf
+    owner: root
+    group: glance
+    mode: '0640'
+    backup: yes
+  vars:
+    glance_endpoint: "{{ glance_endpoint_id.stdout | trim }}"
+  notify: restart glance-api
+
+- name: Pastikan User Glance Memiliki Akses Baca ke Resource System
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack role add --user glance --user-domain Default --system all reader
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Populate Image Service Database
+  ansible.builtin.command: >
+    su -s /bin/sh -c "glance-manage db_sync" glance
+  changed_when: true
+
+- name: Restart Glance
+  ansible.builtin.systemd_service:
+    name: glance-api
+    state: restarted
+    enabled: yes
+  become: yes
+
+- name: Tunggu Glance Siap
+  ansible.builtin.pause:
+    seconds: 30
+
+# ====================================
+#   Verifikasi 
+# ====================================
+
+- name: Verifikasi Glance - Cek apakah image cirros sudah ada
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack image list --format value -c Name
+  args:
+    executable: /bin/bash
+  register: existing_images
+  changed_when: false
+
+- name: Verifikasi Glance - Download image cirros
+  ansible.builtin.shell: |
+    wget -P /tmp/ http://download.cirros-cloud.net/0.4.0/cirros-0.4.0-x86_64-disk.img
+  args:
+    executable: /bin/bash
+  become: yes
+  when: "'cirros' not in existing_images.stdout"
+
+- name: Verifikasi Glance - Upload image cirros
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc
+    openstack image create "cirros" \
+      --file /tmp/cirros-0.4.0-x86_64-disk.img \
+      --disk-format qcow2 \
+      --container-format bare \
+      --public
+  args:
+    executable: /bin/bash
+  become_user: "{{ ansible_user }}"
+  when: "'cirros' not in existing_images.stdout"
+  changed_when: true
+
+- name: Verifikasi Glance - Hapus file image lokal
+  ansible.builtin.file:
+    path: /tmp/cirros-0.4.0-x86_64-disk.*
+    state: absent
+  when: "'cirros' not in existing_images.stdout"
+
+- name: Verfikasi Glance - Tampilkan Image list
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack image list
+  args:
+    executable: /bin/bash
+      #become_user: "{{ ansible_user }}"
+  become: yes
+  register: image_list
+  changed_when: false
+
+- name: Verifikasi Glance - Debug Image List
+  ansible.builtin.debug:
+    msg: "{{ image_list.stdout_lines }}"
+

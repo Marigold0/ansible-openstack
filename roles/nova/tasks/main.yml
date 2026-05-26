@@ -1,0 +1,5 @@
+---
+- name: Import Task nova
+  ansible.builtin.include_tasks: "{{ item }}"
+  loop: "{{ nova_components }}"
+

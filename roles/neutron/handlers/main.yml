@@ -1,0 +1,35 @@
+---
+- name: restart neutron-server
+  ansible.builtin.systemd_service:
+    name: neutron-server
+    state: restarted
+    enabled: yes
+  become: yes
+
+- name: restart neutron-metadata-agent
+  ansible.builtin.systemd_service:
+    name: neutron-metadata-agent
+    state: restarted
+    enabled: yes
+  become: yes
+
+- name: restart neutron-ovn-metadata-agent
+  ansible.builtin.systemd_service:
+    name: neutron-ovn-metadata-agent
+    state: restarted
+    enabled: yes
+  become: yes
+
+- name: restart nova-api
+  ansible.builtin.systemd_service:
+    name: nova-api
+    state: restarted
+    enabled: yes
+  become: yes
+    #- name: restart neutron-server
+    #  ansible.builtin.systemd_service:
+    #    name: neutron-
+    #    state: restarted
+    #    enabled: yes
+    #  become: yes
+    #

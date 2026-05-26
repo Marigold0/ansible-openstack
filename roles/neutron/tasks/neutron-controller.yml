@@ -1,0 +1,127 @@
+---
+- name: Cek User Neutron Apakah Sudah Ada
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc &&  openstack user list --format value -c Name
+  args:
+    executable: /bin/bash
+  register: check_user
+  changed_when: false 
+
+- name: Membuat User neutron
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack user create --domain default --password {{ neutron_db_pass }} neutron
+  args:
+    executable: /bin/bash
+  become: yes
+  when: "'neutron' not in check_user.stdout"
+  changed_when: true
+
+- name: Menambahkan admin Role ke User neutron
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && openstack role add --project service --user neutron admin
+  args:
+    executable: /bin/bash
+  become: yes
+  changed_when: false
+
+- name: Cek neutron Service Apakah Sudah Ada                                                 
+  ansible.builtin.shell: |                                                                    
+    source /home/{{ ansible_user }}/admin-openrc && openstack service list --format value -c Name
+  args:                                                                                       
+    executable: /bin/bash                                                                     
+  become: yes                                                                                 
+  register: existing_service                                                                  
+  changed_when: false                                                                         
+                                                                                              
+- name: Membuat Neutron Service Entity                                                        
+  ansible.builtin.shell: |                                                                    
+   source /home/{{ ansible_user }}/admin-openrc && openstack service create --name neutron --description "Openstack Networking" network                                                     
+  args:                                                                                       
+    executable: /bin/bash                                                                     
+  become: yes                                                                               
+  when: "'neutron' not in existing_service.stdout"                                            
+  changed_when: false
+
+- name: Cek Endpoint Network API Service
+  ansible.builtin.shell: | 
+    source /home/{{ ansible_user }}/admin-openrc && openstack endpoint list --service neutron --format value -c ID
+  args:
+    executable: /bin/bash 
+  register: existing_endpoint
+  become: yes
+  changed_when: false
+
+- name: Membuat Endpoint Networking API Service
+  ansible.builtin.shell: |
+    source /home/{{ ansible_user }}/admin-openrc && 
+    openstack endpoint create --region RegionOne network public http://{{ public_ip }}:9696 &&  openstack endpoint create --region RegionOne network internal http://{{ internal_ip }}:9696 && openstack endpoint create --region RegionOne network admin http://{{ admin_ip }}:9696
+  args:
+    executable: /bin/bash
+  become: yes
+  when: existing_endpoint.stdout == ""
+  changed_when: false
+
+- name: Install Package Neutron
+  ansible.builtin.apt:
+    name:
+      - neutron-server
+      - neutron-ovn-metadata-agent 
+      #      - neutron-plugin-ml2
+      #      - neutron-openvswitch-agent 
+      #      - neutron-l3-agent 
+      #      - neutron-dhcp-agent
+      #      - neutron-metadata-agent
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Konfigutasi neutron.conf
+  ansible.builtin.template:
+    src: neutron.conf.j2
+    dest: /etc/neutron/neutron.conf
+    owner: root
+    group: neutron
+    mode: '0644'
+    backup: yes
+  become: yes
+  changed_when: true
+
+- name: Konfigurasi Modul Layer2 ML2
+  ansible.builtin.template:
+    src: ml2_conf.ini.j2
+    dest: /etc/neutron/plugins/ml2/ml2_conf.ini
+    owner: root
+    group: neutron
+    mode: '0644'
+    backup: yes
+  become: yes
+  changed_when: true
+
+- name: Konfigurasi neutron-ovn-metadata
+  ansible.builtin.template:
+    src: neutron_ovn_metadata_agent.ini.j2
+    dest: /etc/neutron/neutron_ovn_metadata_agent.ini
+    owner: root
+    group: neutron
+    mode: '0644'
+    backup: yes
+  become: yes
+  changed_when: true
+
+- name: Populate Database Neutron
+  ansible.builtin.shell: |
+    su -s /bin/sh -c "neutron-db-manage --config-file /etc/neutron/neutron.conf --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron
+  args:
+    executable: /bin/bash
+  become: yes
+  changed_when: true
+  notify:
+    - restart nova-api
+    - restart neutron-server
+    - restart neutron-ovn-metadata-agent
+
+
+      #- name: Konfigurasi OVS Sebagai L2
+      #  ansible.builtin.command: >
+      #    ovs-vsctl set open . external-ids:ovn-remote={{ ovn-remote }}
+      #

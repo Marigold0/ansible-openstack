@@ -1,0 +1,34 @@
+---
+- name: Install Openstack Dashboard
+  ansible.builtin.apt:
+    name: openstack-dashboard
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Konfigurasi horizon
+  ansible.builtin.template:
+    src: local_settings.py.j2
+    dest: /etc/openstack-dashboard/local_settings.py
+    owner: root
+    group: horizon
+    mode: '0640'
+  become: yes
+  changed_when: true
+
+- name: Konfigurasi Apache2
+  ansible.builtin.template:
+    src: openstack-dashboard.conf.j2
+    dest: /etc/apache2/conf-available/openstack-dashboard.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+  changed_when: true
+
+- name: Restart Apache2
+  ansible.builtin.systemd_service:
+    name: apache2
+    state: reloaded
+    enabled: true
+  become: yes

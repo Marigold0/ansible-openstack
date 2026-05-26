@@ -1,0 +1,7 @@
+---
+- name: restart glance-api
+  ansible.builtin.systemd_service:
+    name: glance-api
+    state: restarted
+    enabled: yes
+  become: yes

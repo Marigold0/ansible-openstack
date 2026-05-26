@@ -1,0 +1,70 @@
+---
+- name: Install Packages Openvswitch
+  ansible.builtin.package:
+    name:
+      - openvswitch-switch
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Start dan Enable Openvswitch
+  ansible.builtin.service:
+    name: openvswitch-switch
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Menambahkan br-int
+  ansible.builtin.command: >
+      ovs-vsctl --may-exist add-br br-int
+  ignore_errors: yes
+  become: yes
+
+# --------------------------------------
+#  br-ex
+# --------------------------------------
+
+- name: Menambahkan br-ex
+  ansible.builtin.command: >
+    ovs-vsctl --may-exist add-br br-ex
+  become: yes
+
+- name: Cek apakah {{ external_interface_name }} sudah jadi port br-ex
+  ansible.builtin.command: ovs-vsctl port-to-br {{ external_interface_name }}
+  register: nic_bridge_check
+  failed_when: false
+  changed_when: false
+  become: yes
+
+- name: Tambah {{ external_interface_name }} ke br-ex
+  ansible.builtin.command: ovs-vsctl add-port br-ex {{ external_interface_name }}
+  when:
+    - nic_bridge_check.rc != 0
+    - external_interface is defined
+  become: yes
+  changed_when: true
+
+- name: Tunggu OVS Siap
+  ansible.builtin.wait_for:
+    path: /var/run/openvswitch/db.sock
+    timeout: 30
+
+- name: Aktifkan Interface ovs-system
+  ansible.builtin.command: >
+    ip link set dev ovs-system up
+  become: true
+
+- name: Aktifkan Interface br-int
+  ansible.builtin.command: >
+    ip link set dev br-int up
+  become: true
+
+- name: Tampilkan OVS bridge list
+  ansible.builtin.command: ovs-vsctl show
+  register: ovs_show
+  become: yes
+  changed_when: false
+
+- name: Debug OVS topology
+  ansible.builtin.debug:
+    msg: "{{ ovs_show.stdout_lines }}"

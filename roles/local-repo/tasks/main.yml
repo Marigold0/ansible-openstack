@@ -1,0 +1,38 @@
+---
+- name: Check Directory
+  ansible.builtin.stat:
+    path: /home/{{ ansible_user }}/backup-repo
+  register: dir_check
+  become: yes
+
+- name: Buat Directory backup
+  ansible.builtin.shell: |
+    mkdir /home/{{ ansible_user }}/backup-repo
+  args:
+    executable: /bin/sh
+  become: yes
+  when: not dir_check.stat.exists
+
+- name: Backup Old Sources List
+  ansible.builtin.shell: |
+    mv /etc/apt/sources.list.d/* /home/{{ ansible_user }}/backup-repo
+  args:
+    executable: /bin/sh
+  become: yes
+  when: not dir_check.stat.exists
+    #run_once: yes
+
+- name: Menambahkan repo local
+  ansible.builtin.template:
+    src: openstack-airgap.list.j2
+    dest: /etc/apt/sources.list.d/openstack-airgap.list
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Apt Update
+  ansible.builtin.apt:
+    update_cache: yes
+  become: yes
+

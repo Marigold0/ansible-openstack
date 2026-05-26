@@ -1,0 +1,10 @@
+OVN_CTL_OPTS=" \
+  --db-nb-create-insecure-remote=yes \
+  --db-sb-create-insecure-remote=yes \
+  --db-nb-addr={{ internal_ip }} \
+  --db-sb-addr={{ internal_ip }} \
+  --db-nb-cluster-local-addr={{ internal_ip }} \
+  --db-sb-cluster-local-addr={{ internal_ip }} \
+  --ovn-northd-nb-db=tcp:{{ internal_ip }}:6641 \
+  --ovn-northd-sb-db=tcp:{{ internal_ip }}:6642
+"

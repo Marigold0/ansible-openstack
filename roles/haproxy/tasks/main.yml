@@ -1,0 +1,25 @@
+---
+- name: Install Haproxy
+  ansible.builtin.apt:
+    name:
+      - haproxy
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Konfigurasi Haproxy
+  ansible.builtin.template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+  become: yes
+
+- name: Restart Haproxy
+  ansible.builtin.systemd_service:
+    name: haproxy
+    state: restated
+    enabled: yes
+  become: yes

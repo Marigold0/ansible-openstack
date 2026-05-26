@@ -1,0 +1,93 @@
+---
+- name: Pastikan osd_disk terdefinisi
+  ansible.builtin.assert:
+    that:
+      - osd_disk is defined
+      - osd_disk | length > 0
+    fail_msg: "Variabel osd_disk harus didefinisikan dan tidak boleh kosong"
+
+# =============================
+#  Prepare OSD
+# =============================
+- name: Cek disk mana yang belum di-prepare
+  ansible.builtin.shell: |
+    pvs --noheadings -o pv_name 2>/dev/null | tr -d ' '
+  register: existing_pvs
+  changed_when: false
+  become: yes
+
+- name: Hapus Disk Sebelum Dijadikan OSD
+  ansible.builtin.command: >
+    ceph-volume lvm zap {{ disk_name }} --destroy
+  loop: "{{ osd_disk }}"
+  loop_control:
+    loop_var: disk_name
+  when: disk_name not in existing_pvs.stdout_lines
+  ignore_errors: yes
+  changed_when: true
+  become: yes
+
+- name: Prepare OSD Untuk Disk Baru
+  ansible.builtin.command: >
+    ceph-volume lvm prepare --data {{ disk_prepare }}
+  loop: "{{ osd_disk }}"
+  loop_control:
+    loop_var: disk_prepare
+  when: disk_prepare not in existing_pvs.stdout_lines
+  changed_when: true
+  become: yes
+
+- name: List Ceph LVM
+  ansible.builtin.command: >
+    ceph-volume lvm list --format json
+  register: osd_list
+  changed_when: false
+  become: yes
+
+- name: Tampilkan OSD List
+  ansible.builtin.debug:
+    msg: "{{ osd_list.stdout }}"
+
+# ============================
+#  Activate OSD
+# ============================
+- name: Pastikan MGR aktif sebelum activate OSD
+  ansible.builtin.command: ceph status
+  register: mgr_check
+  until: "'mgr:' in mgr_check.stdout"
+  retries: 12
+  delay: 5
+  become: yes
+  changed_when: false
+
+- name: Activate Semua OSD
+  ansible.builtin.command: >
+    ceph-volume lvm activate --all
+  changed_when: true
+  become: yes
+
+# =============================
+#  Verfikasi
+# =============================
+- name: Tunggu OSD up
+  ansible.builtin.command: ceph osd stat
+  register: osd_stat
+  until: "'up' in osd_stat.stdout"
+  retries: 15
+  delay: 5
+  changed_when: false
+  become: yes
+
+- name: Tampilkan status OSD
+  ansible.builtin.debug:
+    msg: "{{ osd_stat.stdout_lines }}"
+
+- name: Tampilkan status Ceph lengkap
+  ansible.builtin.command: ceph -s
+  register: ceph_status
+  changed_when: false
+  become: yes
+
+- name: Debug status Ceph
+  ansible.builtin.debug:
+    msg: "{{ ceph_status.stdout_lines }}"
