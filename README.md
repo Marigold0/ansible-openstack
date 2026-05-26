@@ -87,10 +87,16 @@ network:
    ```
 6. Untuk edit / setting aio ada pada groups_vars/aio/vars.yml
    Jangan lupa masukan nama disk yang akan dijadikan osd
-
-7. Kemudian run playbook dengan *default pass adalah admin
+   ```yaml
+   osd_disk:
+   - /dev/sdb
+   - /dev/sdc
+   - /dev/sdd
+   ``
+8. Kemudian run playbook dengan *default pass adalah admin
    ```shell
     ansible-playbook -i inventory/host.ini aio.yml --ask-vault-pass
    ```
 
 6. Akses horizon http://{ public_ip }/horizon
+   
