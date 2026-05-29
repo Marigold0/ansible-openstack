@@ -18,7 +18,7 @@ Jika menggunakan OpenVswitch pada netplan
    sudo apt install openvswitch-switch openvswitch-common
    ```
    
-3. Edit netplan dengan menabahkan
+3. Edit netplan dengan menambahkan
    ```yaml
    openvswitch:{}
    ```
@@ -87,26 +87,31 @@ network:
    ```
 6. Untuk edit / setting aio ada pada groups_vars/aio/vars.yml
    Jangan lupa masukan nama disk yang akan dijadikan osd
-   ```yaml<img width="1862" height="961" alt="image" src="https://github.com/user-attachments/assets/e36272d8-1876-432c-90ab-b2d0290ce402" />
-
-   osd_disk:
+   ```yaml
+      osd_disk:
    - /dev/sdb
    - /dev/sdc
    - /dev/sdd
-   ``
+   ```
 8. Kemudian run playbook dengan *default pass adalah admin
    ```shell
     ansible-playbook -i inventory/host.ini aio.yml --ask-vault-pass
    ```
 
 6. Akses horizon http://{ public_ip }/horizon
-<img width="1920" height="981" alt="image" src="https://github.com/user-attachments/assets/f4373761-e4cd-4721-bfb4-fabc2bbbdac1" />
+   <img width="1920" height="981" alt="image" src="https://github.com/user-attachments/assets/f4373761-e4cd-4721-bfb4-fabc2bbbdac1" />
 
    
 # Air Gap
-Untuk mengaktifkan airgap bisa dengan mengedit file group_vars/aio/vars.yml
-```yaml
-airgap_enable: True
-local_mirror_host: {IP ADDRESS mirror offline}
-local_mirror_apt_port: {{ Port mirror offline}}
-```
+1. Membuat repo local dahulu pada node control(node bootstrap), bisa dengan execute skrip yang sudah ada
+   ```shell
+	sudo chmod +x setup-offline-repo.sh
+   
+	./setup-offline-repo.sh
+   ```
+3. Untuk mengaktifkan airgap bisa dengan mengedit file group_vars/aio/vars.yml
+	```yaml
+	airgap_enable: True
+	local_mirror_host: {IP ADDRESS mirror offline}
+	local_mirror_apt_port: {{ Port mirror offline}}
+	```
